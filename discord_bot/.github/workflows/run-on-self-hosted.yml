@@ -1,0 +1,16 @@
+name: Deploy to Self-Hosted Runner
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start bot with docker-compose
+        run: |
+          cd discord_bot
+          docker-compose pull || true
+          docker-compose up -d --build

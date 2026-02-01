@@ -1,0 +1,59 @@
+name: Build, push and deploy to Koyeb
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./discord_bot
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/discord-bot:latest
+
+      - name: Install Koyeb CLI
+        run: |
+          curl -sL https://cli.koyeb.com/install.sh | sh
+
+      - name: Login to Koyeb
+        env:
+          KOYEB_API_TOKEN: ${{ secrets.KOYEB_API_TOKEN }}
+        run: |
+          if [ -z "$KOYEB_API_TOKEN" ]; then
+            echo "KOYEB_API_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          koyeb login --api-key "$KOYEB_API_TOKEN"
+
+      - name: Deploy to Koyeb (update or create)
+        env:
+          KOYEB_APP: ${{ secrets.KOYEB_APP }}
+          KOYEB_SERVICE: ${{ secrets.KOYEB_SERVICE }}
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/discord-bot:latest
+          if [ -z "$KOYEB_APP" ] || [ -z "$KOYEB_SERVICE" ]; then
+            echo "Set KOYEB_APP and KOYEB_SERVICE in repository secrets with your app and service names" >&2
+            exit 1
+          fi
+          # try to update existing service, otherwise create it
+          koyeb service update "$KOYEB_SERVICE" --app "$KOYEB_APP" --image "$IMAGE" || \
+            koyeb service create --app "$KOYEB_APP" --name "$KOYEB_SERVICE" --image "$IMAGE" --region ewr
