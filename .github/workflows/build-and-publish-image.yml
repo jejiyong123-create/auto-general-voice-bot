@@ -12,7 +12,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Clone repository (avoid actions/checkout submodule post-step)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} repo
+          ls -la repo
+        # no 'with' here; using explicit git clone above
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
@@ -26,6 +32,6 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v4
         with:
-          context: ./discord_bot
+          context: ./repo/discord_bot
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/discord-bot:latest

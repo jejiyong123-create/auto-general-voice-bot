@@ -13,6 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Prevent automatic submodule update which fails if .gitmodules is malformed
+          submodules: false
+          fetch-depth: 0
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
@@ -23,12 +27,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push image
+      - name: Build and push image (tag latest + SHA)
         uses: docker/build-push-action@v4
         with:
           context: ./discord_bot
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/discord-bot:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/discord-bot:latest
+            ghcr.io/${{ github.repository_owner }}/discord-bot:${{ github.sha }}
+
+      - name: Export image tag to env
+        run: echo "IMAGE=ghcr.io/${{ github.repository_owner }}/discord-bot:${{ github.sha }}" >> $GITHUB_ENV
 
       - name: Install Koyeb CLI
         run: |
@@ -48,12 +57,38 @@ jobs:
         env:
           KOYEB_APP: ${{ secrets.KOYEB_APP }}
           KOYEB_SERVICE: ${{ secrets.KOYEB_SERVICE }}
+          IMAGE: ${{ env.IMAGE }}
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/discord-bot:latest
           if [ -z "$KOYEB_APP" ] || [ -z "$KOYEB_SERVICE" ]; then
             echo "Set KOYEB_APP and KOYEB_SERVICE in repository secrets with your app and service names" >&2
             exit 1
           fi
-          # try to update existing service, otherwise create it
           koyeb service update "$KOYEB_SERVICE" --app "$KOYEB_APP" --image "$IMAGE" || \
             koyeb service create --app "$KOYEB_APP" --name "$KOYEB_SERVICE" --image "$IMAGE" --region ewr
+
+  notify:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    if: ${{ needs.build-and-deploy.result == 'failure' }}
+    env:
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+    steps:
+      - name: Notify Slack (if configured)
+        if: ${{ env.SLACK_WEBHOOK != '' }}
+        run: |
+          payload="{\"text\": \"[${{ github.repository }}] Deployment failed for ${{ github.sha }}. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+          curl -s -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK"
+
+      - name: Create issue on failure
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = `Deployment failed: ${{ github.sha }}`
+            const body = `The deployment job 'build-and-deploy' failed for commit ${{ github.sha }} on branch ${{ github.ref }}. Check Actions logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            await github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body
+            })
