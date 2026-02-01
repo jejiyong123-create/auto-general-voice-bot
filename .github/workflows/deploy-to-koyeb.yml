@@ -12,11 +12,11 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Clone repository (avoid actions/checkout submodule post-step)
+      - name: Clone repository (include submodules)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} repo
+          git clone --recurse-submodules https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} repo
           ls -la repo
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
