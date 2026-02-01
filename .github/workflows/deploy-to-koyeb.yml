@@ -31,7 +31,8 @@ jobs:
       - name: Build and push image (tag latest + SHA)
         uses: docker/build-push-action@v4
         with:
-          context: ./repo/discord_bot
+          context: ./repo
+          file: discord_bot/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/discord-bot:latest
