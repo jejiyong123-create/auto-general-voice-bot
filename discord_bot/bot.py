@@ -18,12 +18,53 @@ class AutoVoiceBot(commands.Bot):
 		self.temp_channels: Set[int] = set()
 
 	async def setup_hook(self) -> None:
+		# If a test guild id is provided via env `DISCORD_GUILD`,
+		# copy global commands to that guild and sync there for
+		# immediate availability (guild sync is instant).
+		guild_id = os.environ.get('DISCORD_GUILD')
+		if guild_id:
+			try:
+				guild_obj = discord.Object(id=int(guild_id))
+				self.tree.copy_global_to(guild=guild_obj)
+				await self.tree.sync(guild=guild_obj)
+				print(f"Synced commands to guild {guild_id}")
+				return
+			except Exception as e:
+				print(f"Failed to sync to guild {guild_id}: {e}")
+
+		# Fallback to global sync (can take up to 1 hour to appear).
 		await self.tree.sync()
+		print("Synced global commands (may take up to an hour)")
 
 	async def on_ready(self):
 		print(f"Logged in as {self.user} (id: {self.user.id})")
 
 	async def on_voice_state_update(self, member, before, after):
+		# Auto-create a temp voice channel when a user joins a configured lobby
+		lobby_id = os.environ.get('DISCORD_LOBBY_ID')
+		# Handle creation first (user joined 'lobby' channel)
+		if after and lobby_id:
+			try:
+				if after.channel and int(lobby_id) == after.channel.id:
+					# create a new voice channel for the member
+					guild = member.guild
+					chan_name = f"{member.display_name}-room"
+					category = after.channel.category
+					# grant the creator manage_channels so they can edit
+					overwrites = {member: discord.PermissionOverwrite(manage_channels=True)}
+					new_chan = await guild.create_voice_channel(chan_name, category=category, overwrites=overwrites)
+					# track for auto-deletion
+					self.temp_channels.add(new_chan.id)
+					# move the user into their new channel
+					try:
+						await member.move_to(new_chan)
+					except Exception:
+						# ignore move failure (user may have disconnected)
+						pass
+					return
+			except Exception as e:
+				print(f"Failed to auto-create temp channel: {e}")
+
 		# If a tracked temp channel becomes empty, delete it
 		channel = before.channel
 		if channel and channel.id in self.temp_channels:
