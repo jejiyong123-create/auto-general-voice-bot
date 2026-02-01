@@ -38,7 +38,8 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/discord-bot:${{ github.sha }}
 
       - name: Export image tag to env
-        run: echo "IMAGE=ghcr.io/${{ github.repository_owner }}/discord-bot:${{ github.sha }}" >> $GITHUB_ENV
+        run: |
+          echo "IMAGE=ghcr.io/${{ github.repository_owner }}/discord-bot:${{ github.sha }}" >> $GITHUB_ENV
 
       - name: Install Koyeb CLI
         run: |
@@ -59,13 +60,14 @@ jobs:
           KOYEB_APP: ${{ secrets.KOYEB_APP }}
           KOYEB_SERVICE: ${{ secrets.KOYEB_SERVICE }}
           IMAGE: ${{ env.IMAGE }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
         run: |
           if [ -z "$KOYEB_APP" ] || [ -z "$KOYEB_SERVICE" ]; then
             echo "Set KOYEB_APP and KOYEB_SERVICE in repository secrets with your app and service names" >&2
             exit 1
           fi
-          koyeb service update "$KOYEB_SERVICE" --app "$KOYEB_APP" --image "$IMAGE" || \
-            koyeb service create --app "$KOYEB_APP" --name "$KOYEB_SERVICE" --image "$IMAGE" --region ewr
+          koyeb service update "$KOYEB_SERVICE" --app "$KOYEB_APP" --image "$IMAGE" --env DISCORD_TOKEN="$DISCORD_TOKEN" || \
+            koyeb service create --app "$KOYEB_APP" --name "$KOYEB_SERVICE" --image "$IMAGE" --region ewr --env DISCORD_TOKEN="$DISCORD_TOKEN"
 
   notify:
     needs: build-and-deploy
