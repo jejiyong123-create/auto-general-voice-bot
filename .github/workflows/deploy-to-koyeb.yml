@@ -17,7 +17,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git clone --recurse-submodules https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} repo
-          ls -la repo
+          cd repo
+          git submodule update --init --recursive
+          cd ..
+          echo "=== Contents of repo ===" && ls -la repo
+          echo "=== Contents of repo/discord_bot ===" && ls -la repo/discord_bot || echo "ERROR: repo/discord_bot not found"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
