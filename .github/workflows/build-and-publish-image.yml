@@ -36,6 +36,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: ./repo/discord_bot
-          file: Dockerfile
+          file: ./repo/discord_bot/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/discord-bot:latest
